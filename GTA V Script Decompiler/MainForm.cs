@@ -1026,5 +1026,87 @@ namespace Decompiler
 				}
 			return false;
 		}
-	}
+
+        private void bulkDecompilerToolStripMenuItem_Click(object sender, EventArgs e)
+        {          
+                FolderBrowserDialog fbd = new FolderBrowserDialog();
+                if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    string[] files = Directory.GetFiles(fbd.SelectedPath);
+                    foreach (string file in files)
+                    {
+                        try
+                        {
+                            bulkDecompiler(fbd.SelectedPath, file);
+                        }
+                        catch (Exception ex)
+                        {
+                        //MessageBox.Show("Error decompiling script " + Path.GetFileNameWithoutExtension(file) + " - " + ex.Message);
+                        updatestatus("Error decompiling script " + Path.GetFileNameWithoutExtension(file) + " - " + ex.Message);
+                        }
+                    }
+                }
+        }
+
+        private void bulkDecompiler(string path, string theFileName)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.FileName = theFileName;
+            DateTime Start = DateTime.Now;
+            filename = Path.GetFileNameWithoutExtension(ofd.FileName);
+            loadingfile = true;
+            fctb1.Clear();
+            listView1.Items.Clear();
+            updatestatus("Opening Script File...");
+            string ext = Path.GetExtension(ofd.FileName);
+            if (ext == ".full") //handle openIV exporting pc scripts as *.ysc.full
+            {
+                ext = Path.GetExtension(Path.GetFileNameWithoutExtension(ofd.FileName));
+            }
+#if !DEBUG
+				try
+				{
+#endif
+            fileopen = new ScriptFile(ofd.OpenFile(), ext != ".ysc");
+#if !DEBUG
+				}
+				catch (Exception ex)
+				{
+					updatestatus("Error decompiling script " + ex.Message);
+					return;
+				}
+#endif
+            updatestatus("Decompiled Script File, Time taken: " + (DateTime.Now - Start).ToString());
+            MemoryStream ms = new MemoryStream();
+
+            fileopen.Save(ms, false);
+
+
+            foreach (KeyValuePair<string, Tuple<int, int>> locations in fileopen.Function_loc)
+            {
+                listView1.Items.Add(new ListViewItem(new string[] { locations.Key, locations.Value.Item1.ToString(), locations.Value.Item2.ToString() }));
+            }
+            fileopen.Close();
+            StreamReader sr = new StreamReader(ms);
+            ms.Position = 0;
+            updatestatus("Loading Text in Viewer...");
+            fctb1.Text = sr.ReadToEnd();
+            SetFileName(filename);
+            ScriptOpen = true;
+            updatestatus("Ready, Time taken: " + (DateTime.Now - Start).ToString());
+            if (ext != ".ysc")
+                ScriptFile.npi.savefile();
+            else
+                ScriptFile.X64npi.savefile();
+
+            bool exists = Directory.Exists(path + "\\decomplied");
+            if (!exists)
+               Directory.CreateDirectory(path + "\\decomplied");
+
+            using (StreamWriter sw = new StreamWriter(path + "\\decomplied\\" + Path.GetFileNameWithoutExtension(ofd.FileName) + ".c4", true))
+            {
+                sw.WriteLine(fctb1.Text);
+            }
+        }
+    }
 }
